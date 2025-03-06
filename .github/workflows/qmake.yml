@@ -22,55 +22,45 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - windows-2019
+          - windows-latest
           - macos-latest
           - ubuntu-latest
-        qt_ver: 
-          - 6.6.0
 
     steps:
-      - name: Install dependencies on windows
-        if: startsWith(matrix.os, 'windows')
-        run: |
-          choco install ninja
-          ninja --version
-          cmake --version
-      - name: Install dependencies on macos
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew install ninja
-          ninja --version
-          cmake --version
-          clang --version
-      - name: Install dependencies on ubuntu
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get install ninja-build
-          ninja --version
-          cmake --version
-          gcc --version
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: ${{ matrix.qt_ver }}
-          install-deps: 'true'
-          modules: 'addons.qtnetworkauth'
-          cache: 'true'
-
-      - uses: actions/checkout@v3
-        with:
+      - uses: actions/checkout@v4
+        with: 
           fetch-depth: 1
+          
+      - uses: ./.github/actions/install-dependencies
+        with:
+          os_name: ${{ matrix.os }}
+
+      - uses: RealChuan/install-jom@main
+
+      - name: mkdir build
+        shell: bash
+        run: |
+          mkdir build
 
       - name: msvc-build
         if: startsWith(matrix.os, 'windows')
-        shell: cmd
+        shell: pwsh
         run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          qmake
-          nmake
-      - name: build macos or ubuntu
-        if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu')
+          ..\scripts\windows\setVsDev.ps1
+          & qmake ./../.
+          & jom
+        working-directory: build
+      - name: ubuntu-build
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
         run: |
-          qmake
-          make -j4
+          qmake ./../.
+          make -j $(nproc)
+        working-directory: build
+      - name: macos-build
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          qmake ./../.
+          make -j $(sysctl -n hw.ncpu)
+        working-directory: build

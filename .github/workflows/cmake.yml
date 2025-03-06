@@ -2,7 +2,7 @@ name: CMake Build
 
 on: 
   push:
-    paths-ignore: # 下列文件的变更不触发部署，可以自行添加
+    paths-ignore: 
         - '.clang*'
         - 'LICENSE'
         - '.gitignore'
@@ -25,76 +25,38 @@ jobs:
           - windows-latest
           - macos-latest
           - ubuntu-latest
-        qt_ver: 
-          - 6.6.0
         build_type:
-          - "Release"
+          - "RelWithDebInfo"
         generators:
           - "Ninja"
 
     steps:
-      - name: Install dependencies on windows
-        if: startsWith(matrix.os, 'windows')
-        run: |
-          choco install ninja
-          ninja --version
-          cmake --version
-      - name: Install dependencies on macos
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew install ninja
-          ninja --version
-          cmake --version
-          clang --version
-      - name: Install dependencies on ubuntu
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get install ninja-build
-          ninja --version
-          cmake --version
-          gcc --version
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
-        with:
-          version: ${{ matrix.qt_ver }}
-          install-deps: 'true'
-          modules: 'addons.qtnetworkauth'
-          cache: 'true'
-
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Enable Developer Command Prompt
-        if: startsWith(matrix.os, 'windows')
-        uses: ilammy/msvc-dev-cmd@v1.12.1
+      - uses: ./.github/actions/install-dependencies
         with:
-          arch: amd64
-      - name: Configure windows
+          os_name: ${{ matrix.os }}
+
+      - name: Configure and build windows
         if: startsWith(matrix.os, 'windows')
-        shell: bash
+        shell: pwsh
         run: |
-          cmake \
-            -S . \
-            -B ./build \
-            -DCMAKE_C_COMPILER=cl \
-            -DCMAKE_CXX_COMPILER=cl \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -G "${{ matrix.generators }}" \
-            -DCMAKE_INSTALL_PREFIX:PATH=instdir
-      - name: Configure macos or ubuntu
-        if: startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'ubuntu')
-        shell: bash
-        run: |
-          cmake \
-            -S . \
-            -B ./build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -G "${{ matrix.generators }}" \
-            -DCMAKE_INSTALL_PREFIX:PATH=instdir
-      - name: Build
-        shell: bash
-        run: |
+          .\scripts\windows\setVsDev.ps1
+          cmake `
+            -S . `
+            -B ./build `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -G "${{ matrix.generators }}"
           cmake --build ./build --config ${{ matrix.build_type }}
-          
+      - name: Configure and build on ubuntu or macos
+        if: startsWith(matrix.os, 'ubuntu') || startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          cmake \
+            -S . \
+            -B ./build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -G "${{ matrix.generators }}"
+          cmake --build ./build --config ${{ matrix.build_type }}
